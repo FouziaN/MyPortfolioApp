@@ -1,117 +1,141 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, {useEffect, useState} from 'react';
+import {SafeAreaView, StyleSheet, Text, View, FlatList} from 'react-native';
+import axios from 'axios';
+import StocksCard from './src/components/StocksCard';
+import ExpandableCard from './src/components/ExpandableCard';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+// Define the type for the holdings array
+type Holding = {
+  close: any;
+  symbol: string;
+  ltp: any;
+  quantity: number;
+  avgPrice: number;
+};
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+// Format a number to display a single digit at the end
+const formatNumber = (number: number) => Number(number.toFixed(1));
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+// Calculate Current Value (Individual item)
+const calculateCurrentValue = ({ltp, quantity}: Holding) =>
+  formatNumber(ltp * quantity);
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+// Calculate Investment Value (Individual item)
+const calculateInvestmentValue = ({avgPrice, quantity}: Holding) =>
+  formatNumber(avgPrice * quantity);
+
+// Calculate P&L (Individual item)
+const calculatePNL = (item: Holding) =>
+  formatNumber(calculateCurrentValue(item) - calculateInvestmentValue(item));
+
+// Calculate Current Value Total
+const calculateCurrentValueTotal = (holdings: Holding[]) =>
+  formatNumber(
+    holdings.reduce((total, item) => total + calculateCurrentValue(item), 0),
   );
-}
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+// Calculate Total Investment
+const calculateTotalInvestment = (holdings: Holding[]) =>
+  formatNumber(
+    holdings.reduce((total, item) => total + calculateInvestmentValue(item), 0),
+  );
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+// Calculate Total P&L
+const calculateTotalPNL = (holdings: Holding[]) =>
+  formatNumber(
+    calculateCurrentValueTotal(holdings) - calculateTotalInvestment(holdings),
+  );
+
+// Calculate Today's P&L
+const calculateTodayPNL = (holdings: Holding[]) =>
+  formatNumber(
+    holdings.reduce(
+      (total, item) => total + (item.close - item.ltp) * item.quantity,
+      0,
+    ),
+  );
+
+const App = () => {
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await axios.get(
+          'https://run.mocky.io/v3/bde7230e-bc91-43bc-901d-c79d008bddc8',
+        );
+        setHoldings(response.data.userHolding);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const renderStockCard = ({item}: {item: Holding}) => (
+    <StocksCard
+      Symbol={item.symbol}
+      LTPAmount={item.ltp}
+      Quantity={item.quantity}
+      PLAmount={calculatePNL(item)}
+    />
+  );
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerText}>Upstox Holding</Text>
+      </View>
+      <FlatList
+        data={holdings}
+        keyExtractor={item => item.symbol}
+        renderItem={renderStockCard}
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
+      <ExpandableCard
+        CurrentValue={calculateCurrentValueTotal(holdings)}
+        TotalInvestment={calculateTotalInvestment(holdings)}
+        PLValue={calculateTodayPNL(holdings)}
+      />
+      <View style={styles.profitBox}>
+        <Text style={styles.label}>Profit & Loss : </Text>
+        <Text style={styles.value}>₹{calculateTotalPNL(holdings)}</Text>
+      </View>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    backgroundColor: 'grey',
+    flex: 1,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  header: {
+    backgroundColor: '#A020F0',
+    height: 40,
+    justifyContent: 'center',
+    paddingLeft: 10,
   },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
+  headerText: {
+    color: 'white',
     fontWeight: '700',
+    fontSize: 16,
+  },
+  profitBox: {
+    bottom: -30,
+    backgroundColor: 'white',
+    paddingBottom: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
+  label: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  value: {
+    fontSize: 16,
   },
 });
 
